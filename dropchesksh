@@ -16,7 +16,9 @@ DO_NOT_CONFIRM='0'
 LOGFILE="/var/tmp/dropchecksh_$(date +%m-%d_%H:%M:%S).log"
 
 DHCP_ALL_TRUE='0'
+SKIP_PRECHECK='0'
 
+SKIP_TRACEROUTE_CHECK='0'
 ICMP_INTERVAL='0.1'
 ICMP_COUNT='5'
 ICMP_SIZE='1472'
@@ -33,6 +35,7 @@ DNS_A_TARGET_ADDR='203.178.137.58'
 DNS_AAAA_TARGET_FQDN='www.wide.ad.jp'
 DNS_AAAA_TARGET_ADDR='2001:200:dff:fff1:216:3eff:fe4b:651c'
 
+SKIP_WWW_CHECK='0'
 BROWSER="Firefox.app"
 WEBSITE_IPV4_URL=('https://ipv4.google.com/' 'http://neverssl.com/')
 WEBSITE_IPV6_URL=('https://ipv6.google.com/')
@@ -497,8 +500,10 @@ fullcheck() {
   #====================================
   # Phase 0. Retrieve IP address
   #====================================
-  setup_interface
-  (($? == 2)) && return 2
+  [[ "$SKIP_PRECHECK" == '0' ]] && {
+    setup_interface
+    (($? == 2)) && return 2
+  }
 
   watch_ip_addr "$interface"
 
@@ -534,18 +539,18 @@ fullcheck() {
   #====================================
   # Phase 3. Traceroute check
   #====================================
-  while true; do
-    echoorange "Phase 3. Traceroute to IPv4/IPv6 target\n"
-    ## Comment out next line if mtr check is needed.
-    echo "skipped."; break
-    tmux new-session -s "$tmuxsession" -d "$DROPCHECKSH --eval trace_to_ipv4_internet"
-    tmux split-window -t "$tmuxsession" -h "$DROPCHECKSH --eval trace_to_ipv6_internet"
-    tmux attach-session -t "$tmuxsession"
-    echo -e "done.\n"
-    tmux kill-session -t "$tmuxsession" 2> /dev/null
-    confirm || break
-  done
-  echo
+  [[ "$SKIP_TRACEROUTE_CHECK" == '0' ]] && {
+    while true; do
+      echoorange "Phase 3. Traceroute to IPv4/IPv6 target\n"
+      tmux new-session -s "$tmuxsession" -d "$DROPCHECKSH --eval trace_to_ipv4_internet"
+      tmux split-window -t "$tmuxsession" -h "$DROPCHECKSH --eval trace_to_ipv6_internet"
+      tmux attach-session -t "$tmuxsession"
+      echo -e "done.\n"
+      tmux kill-session -t "$tmuxsession" 2> /dev/null
+      confirm || break
+    done
+    echo
+  }
 
   #====================================
   # Phase 4. DNS check
@@ -556,8 +561,10 @@ fullcheck() {
   #====================================
   # Phase 5. WWW check
   #====================================
-  check_www
-  echo
+  [[ "$SKIP_WWW_CHECK" == '0' ]] && {
+    check_www
+    echo
+  }
 
   return 0
 }
@@ -575,6 +582,9 @@ argparse() {
         shift 2 ;;
       '--do-not-confirm')
         DO_NOT_CONFIRM='1'
+        shift ;;
+      '--skip-precheck')
+        SKIP_PRECHECK='1'
         shift ;;
       '--koma')
         load_drop_information "$2"
@@ -597,11 +607,17 @@ argparse() {
       '--ping-internet')
         check_ping_internet "$INTERFACE"
         shift ;;
+      '--skip-traceroute')
+        SKIP_TRACEROUTE_CHECK='1'
+        shift ;;
       '--mtr'|'--trace')
         check_traceroute "$INTERFACE"
         shift ;;
       '--dns')
         check_dns "$INTERFACE"
+        shift ;;
+      '--skip-www')
+        SKIP_WWW_CHECK='1'
         shift ;;
       '--www')
         check_www "$INTERFACE"
