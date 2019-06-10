@@ -128,7 +128,10 @@ setup_interface() {
     # echored "Tagged interface ($vlanif) was selected."
     # INTERFACE="$vlanif"
     [[ "$interface" =~ en[0-9]+ ]] && {
+      show_drop_information
+      echo
       echored "This is tagged drop! Please specify VLAN interface and rerun."
+      echo
       return 2
     }
   fi
@@ -459,19 +462,19 @@ check_dns() {
     echoorange "Phase 4-1. Lookup A record with IPv4 resolver\n"
     for server in "${RESOLVER_V4[@]}"; do
       local out=$(time lookup_a_record $server)
-      (($? > 0)) && echored "A (IPv4): Wrong answer ${out}" || echored "A (IPv4): OK"
+      (($? > 0)) && echored "A (IPv4): Wrong answer ${out}" || echored "A ($server): OK"
     done
     echo
     echoorange "Phase 4-2. Lookup AAAA record with IPv4 resolver\n"
     for server in "${RESOLVER_V4[@]}"; do
       local out=$(time lookup_aaaa_record $server)
-      (($? > 0)) && echored "AAAA (IPv4): Wrong answer ${out}" || echored "AAAA (IPv4): OK"
+      (($? > 0)) && echored "AAAA (IPv4): Wrong answer ${out}" || echored "AAAA ($server): OK"
     done
     echo
     echoorange "Phase 4-3. Lookup AAAA record with IPv6 resolver\n"
     for server in "${RESOLVER_V6[@]}"; do
       local out=$(time lookup_aaaa_record $server)
-      (($? > 0)) && echored "AAAA (IPv6): Wrong answer ${out}" || echored "AAAA (IPv6): OK"
+      (($? > 0)) && echored "AAAA (IPv6): Wrong answer ${out}" || echored "AAAA ($server): OK"
     done
     echo
     confirm || break
@@ -645,7 +648,7 @@ fukurozume() {
 main() {
   stop_wifi 1
   argparse $@
-  stop_wifi 0
+  # stop_wifi 0
 }
 
 # fukurozume $1
