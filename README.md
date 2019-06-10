@@ -14,5 +14,11 @@
 ### コマ番号を指定してアドレスをチェックする
 事前にTTDBからドロップチェックCSVをダウンロードしておく．
 ```
-% ./dropcheck --fullcheck --csv ~/Downloads/dropcheck.csv --koma 4a28
+% ./dropchecksh --fullcheck --csv ~/Downloads/dropcheck.csv --koma 4a28
+% ./dropchecksh --fullcheck --csv ~/Downloads/dropcheck.csv --koma 4a28 --skip-www --interface vlan1
+```
+
+タグインターフェイスの警告とアドレス自動割当をスキップする．
+```
+% ./dropchecksh --fullcheck --csv ~/Downloads/dropcheck.csv --koma 4a28 --skip-prechck
 ```
