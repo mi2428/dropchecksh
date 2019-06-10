@@ -18,7 +18,7 @@
 % ./dropchecksh --fullcheck --csv ~/Downloads/dropcheck.csv --koma 4a28 --skip-www --interface vlan1
 ```
 
-タグインターフェイスの警告とアドレス自動割当をスキップする．
+タグインターフェイスの警告とアドレス自動設定をスキップする．
 ```
-% ./dropchecksh --fullcheck --csv ~/Downloads/dropcheck.csv --koma 4a28 --skip-prechck
+% ./dropchecksh --fullcheck --csv ~/Downloads/dropcheck.csv --koma 4a28 --skip-precheck
 ```
