@@ -1,0 +1,636 @@
+#!/bin/bash
+cd $(dirname $0)
+
+BANNER="
+____                   ____ _               _      ____   ___  _  ___
+|  _ \ _ __ ___  _ __  / ___| |__   ___  ___| | __ |___ \ / _ \/ |/ _ \
+| | | | '__/ _ \| '_ \| |   | '_ \ / _ \/ __| |/ /   __) | | | | | (_) |
+| |_| | | | (_) | |_) | |___| | | |  __/ (__|   <   / __/| |_| | |\__, |
+|____/|_|  \___/| .__/ \____|_| |_|\___|\___|_|\_\ |_____|\___/|_|  /_/
+               |_|
+"
+
+INTERFACE="en7"
+DROPCHECKSH="$0"
+DO_NOT_CONFIRM='0'
+LOGFILE="/var/tmp/dropchecksh_$(date +%m-%d_%H:%M:%S).log"
+
+DHCP_ALL_TRUE='0'
+
+ICMP_INTERVAL='0.1'
+ICMP_COUNT='5'
+ICMP_SIZE='1472'
+ICMPV6_SIZE='1452'
+ICMP_DO_NOT_FLAGMENT='1'
+ICMPV6_DO_NOT_FLAGMENT='1'
+IPV4_PING_TARGET='1.1.1.1'
+IPV6_PING_TARGET='2606:4700:4700::1111'
+
+RESOLVER_V4=('45.0.192.14' '45.0.192.15')
+RESOLVER_V6=('2001:3e8:0:1100::14' '2001:3e8:0:1100::15')
+DNS_A_TARGET_FQDN='www.wide.ad.jp'
+DNS_A_TARGET_ADDR='203.178.137.58'
+DNS_AAAA_TARGET_FQDN='www.wide.ad.jp'
+DNS_AAAA_TARGET_ADDR='2001:200:dff:fff1:216:3eff:fe4b:651c'
+
+BROWSER="Firefox.app"
+WEBSITE_IPV4_URL=('https://ipv4.google.com/' 'http://neverssl.com/')
+WEBSITE_IPV6_URL=('https://ipv6.google.com/')
+
+IP_ADDR_REGEX='([[:digit:]]{1,3}\.){3}[[:digit:]]{1,3}/[[:digit:]]{1,2}|[[:xdigit:]]{1,4}(:[[:xdigit:]]{0,4}){1,7}/[[:digit:]]{1,3}'
+
+DROP_CSV=''
+DROP_KOMA=''
+DROP_VLANID=''
+DROP_TAGGED=''
+DROP_SWITCHPORT=''
+DROP_ADDRESS_TYPE=''
+DROP_IPV4_ADDR=''
+DROP_IPV6_ADDR=''
+DROP_DHCP=''
+DROP_SECURITY=''
+DROP_IPV4_SFC=''
+DROP_IPV6_SFC=''
+
+echored() { echo -e "\033[0;31m$@\033[0m"; }
+echoorange() { echo -ne "\033[0;33m$@\033[0m"; }
+
+pause() { read ; }
+
+confirm() {
+  (( $DO_NOT_CONFIRM == 1 )) && return 0
+  echoorange "Repeat? (y/N): "
+  read c
+  case "$c" in
+    "y")
+      return 0 ;;
+    *)
+      return 1
+    esac
+}
+
+stop_wifi() {
+  (($# == 1)) || return 1
+  case $1 in
+    '0')
+      networksetup -setairportpower Wi-Fi on 2>&1 1> /dev/null ;;
+    '1')
+      networksetup -setairportpower Wi-Fi off 2>&1 1> /dev/null ;;
+  esac
+  return 0
+}
+
+load_drop_information() {
+  (($# == 1)) || return 1
+  [[ -n $DROP_CSV ]] || return 2
+  # local vlanid="$1"
+  # local line=$(nkf "$DROP_CSV" | awk -F, "\$2 == $vlanid")
+  local koma="$1"
+  local line=$(nkf "$DROP_CSV" | awk -F, "tolower(\$14) ~ /${koma}.*/")
+  DROP_KOMA="$(echo $line | nkf | cut -d ',' -f 14)"
+  DROP_VLANID="$(echo $line | nkf | cut -d ',' -f 2)"
+  DROP_TAGGED="$(echo $line | nkf | cut -d ',' -f 3)"
+  DROP_SWITCHPORT="$(echo $line | nkf | cut -d ',' -f 4)"
+  DROP_POD="$(echo $line | nkf | cut -d ',' -f 5)"
+  DROP_ADDRESS_TYPE="$(echo $line | nkf | cut -d ',' -f 7)"
+  DROP_IPV4_ADDR="$(echo $line | nkf | cut -d ',' -f 8)"
+  DROP_IPV6_ADDR="$(echo $line | nkf | cut -d ',' -f 9)"
+  DROP_DHCP="$(echo $line | nkf | cut -d ',' -f 10)"
+  DROP_SECURITY="$(echo $line | nkf | cut -d ',' -f 11)"
+  DROP_IPV4_SFC="$(echo $line | nkf | cut -d ',' -f 12)"
+  DROP_IPV6_SFC="$(echo $line | nkf | cut -d ',' -f 13)"
+  return 0
+}
+
+show_drop_information() {
+  echo "---"
+  echo -ne 'Koma:\t'; echo "$DROP_KOMA"
+  echo -ne 'POD:\t'; echo "$DROP_POD"
+  echo -ne 'VLAN:\t'; echo "$DROP_VLANID"
+  echo -ne 'Tagged:\t'; echo "$DROP_TAGGED" | grep --color=auto -E -i "TRUE|$"
+  echo -ne 'DHCP:\t'; echo "$DROP_DHCP" | grep --color=auto -E -i "FALSE|$"
+  echo -ne 'IPv4:\t'; echo "$DROP_IPV4_ADDR" | grep --color=auto -E -i "$IP_ADDR_REGEX|$"
+  echo -ne 'IPv6:\t'; echo "$DROP_IPV6_ADDR" | grep --color=auto -E -i "$IP_ADDR_REGEX|$"
+  echo "---"
+  return 0
+}
+
+setup_interface() {
+  local interface="$INTERFACE"
+  if [[ "$DROP_TAGGED" == 'true' ]]; then
+    # if [[ -z "$(networksetup -listVLANs | "Tag: $DROP_VLANID")" ]]; then
+    #   networksetup -createVLAN "vlan${DROP_VLANID}" "$interface" "$DROP_VLANID"
+    # fi
+    # local vlanif=$(networksetup -listVLANs | grep -B 3 "Tag: $DROP_VLANID" | grep "Hardware" | awk '{print $NF}')
+    # echored "Tagged interface ($vlanif) was selected."
+    # INTERFACE="$vlanif"
+    [[ "$interface" =~ en[0-9]+ ]] && {
+      echored "This is tagged drop! Please specify VLAN interface and rerun."
+      return 2
+    }
+  fi
+  if [[ "$DHCP_ALL_TRUE" == '0' ]] && [[ "$DROP_DHCP" == 'false' ]]; then
+    local host=$(echo "$DROP_IPV4_ADDR" | ipcalc | grep "HostMax:" | awk '{print $2}')
+    local netmask=$(echo "$DROP_IPV4_ADDR" | ipcalc | grep "Netmask:" | awk '{print $2}')
+    local gateway=$(echo "$DROP_IPV4_ADDR" | ipcalc | grep "HostMin:" | awk '{print $2}')
+    set_ipv4_addr_static "$INTERFACE" "$host" "$netmask" "$gateway"
+    echored "IPv4 address was assigned."
+  fi
+  return 0
+}
+
+watch_ip_addr() {
+  (($# == 1)) || return 1
+  local interface="$1"
+  local breakflag="continue"
+  while true; do
+    clear
+    ip addr show dev "$interface" | grep --color=auto -E -i "$IP_ADDR_REGEX|$"
+    read -t 1 breakflag
+    [[ "$breakflag" == "continue" ]] || break
+  done
+  return 0
+}
+
+set_ipv4_addr_static() {
+  (($# == 4)) || return 1
+  local interface="$1"
+  local address="$2"
+  local netmask="$3"
+  local router="$4"
+  networksetup -setmanual "$interface" "$address" "$netmask" "$router" || return 2
+  return 0
+}
+
+set_ipv4_addr_static_cidr() {
+  (($# == 3)) || return 1
+  local interface="$1"
+  local cidr="$2"
+  local router="$3"
+  local ipaddr="$(ipcalc $cidr | grep 'Address:' | awk '{print $2}')"
+  local netmask="$(ipcalc $cidr | grep 'Netmask:' | awk '{print $2}')"
+  set_ipv4_addr_static "$interface" "$ipaddr" "$netmask" "$router"
+  return $?
+}
+
+set_ipv4_addr_dhcp() {
+  (($# == 1)) || return 1
+  networksetup -setdhcp "$interface" || return 2
+  return 0
+}
+
+get_ipv4_addr() {
+  (($# == 1)) || return 1
+  local interface="$1"
+  ip -4 addr show dev "$interface" | grep -m 1 'inet' | cut -d ' ' -f 2 | grep --color=auto -E -i "$IP_ADDR_REGEX"
+  return 0
+}
+
+get_ipv6_global_addr() {
+  (($# == 1)) || return 1
+  local interface="$1"
+  ip -6 addr show dev "$interface" | grep -m 1 '2001:' | cut -d ' ' -f 2 | grep --color=auto -E -i "$IP_ADDR_REGEX"
+  return 0
+}
+
+get_ipv4_gw_addr() {
+  (($# == 1)) || return 1
+  local interface="$1"
+  ip -4 route | grep "default" | grep -m 1 "${interface}" | cut -d' ' -f 3
+  return 0
+}
+
+get_ipv6_gw_addr() {
+  (($# == 1)) || return 1
+  local interface="$1"
+  ip -6 route | grep "default" | grep -m 1 "${interface}" | cut -d' ' -f 3
+  return 0
+}
+
+check_assigned_ipv4_addr() {
+  (($# == 1)) || return 1
+  local interface="$1"
+  local ipaddr=$(get_ipv4_addr "$interface")
+  local network=$(ipcalc "$ipaddr" | grep "Network:" | awk '{print $2}')
+  [[ "$network" == "$DROP_IPV4_ADDR" ]] || return 2
+  return 0
+}
+
+check_assigned_ipv6_addr() {
+  (($# == 1)) || return 1
+  local interface="$1"
+  local ipaddr=$(get_ipv6_global_addr "$interface")
+  local network=$(subnetcalc "$ipaddr" -n -nocolor | grep "HOST address in" | awk '{print $8}')
+  [[ "$network" == "$DROP_IPV6_ADDR" ]] || return 2
+  return 0
+}
+
+ping4() {
+  (($# == 4)) || return 1
+  local interface="$1"
+  local destination="$2"
+  local size="$3"
+  local count="$4"
+  local options=""
+  [[ "$size" != '-1' ]] && options="$options -s $size"
+  [[ "$count" != '-1' ]] && options="$options -c $count"
+  [[ "$ICMP_DO_NOT_FLAGMENT" == '1' ]] && options="$options -D"
+  ping -i "$ICMP_INTERVAL" $options -v "$destination" 2>&1 |\
+  grep --color=auto -i -E '[[:digit:]]* packets received|$'
+  return 0
+}
+
+ping6() {
+  (($# == 4)) || return 1
+  local interface="$1"
+  local destination="$2"
+  local size="$3"
+  local count="$4"
+  local options=""
+  [[ "$size" != '-1' ]] && options="$options -s $size"
+  [[ "$count" != '-1' ]] && options="$options -c $count"
+  [[ "$ICMP_DO_NOT_FLAGMENT" == '1' ]] && options="$options -m"
+  # only root may use interval < 1s
+  sudo ping6 -i "$ICMP_INTERVAL" $options -v "$destination" 2>&1 |\
+  grep --color=auto -i -E '[[:digit:]]* packets received|$'
+  return 0
+}
+
+ping4_short() {
+  (($# >= 2)) || return 1
+  local interface="$1"
+  local destination="$2"
+  local count="${3:--1}"
+  ping4 "$interface" "$destination" -1 "$count"
+  return 0
+}
+
+ping4_long() {
+  (($# >= 2)) || return 1
+  local interface="$1"
+  local destination="$2"
+  local count="${3:--1}"
+  ping4 "$interface" "$destination" "$ICMP_SIZE" "$count"
+  return 0
+}
+
+ping6_short() {
+  (($# >= 2)) || return 1
+  local interface="$1"
+  local destination="$2"
+  local count="${3:--1}"
+  ping6 "$interface" "$destination" -1 "$count"
+  return 0
+}
+
+ping6_long() {
+  (($# >= 2)) || return 1
+  local interface="$1"
+  local destination="$2"
+  local count="${3:--1}"
+  ping6 "$interface" "$destination" "$ICMP_SIZE" "$count"
+  return 0
+}
+
+ping_to_ipv4_gw() {
+  (($# >= 1)) || return 1
+  local interface="$1"
+  local destination="$(get_ipv4_gw_addr "$interface")"
+  [[ -n "$destination" ]] || return 2
+  ping4_short "$interface" "$destination" "$ICMP_COUNT"
+  echo
+  ping4_long "$interface" "$destination" "$ICMP_COUNT"
+  return 0
+}
+
+ping_to_ipv6_gw() {
+  (($# >= 1)) || return 1
+  local interface="$1"
+  local destination="$(get_ipv6_gw_addr "$interface")"
+  [[ -n "$destination" ]] || return 2
+  ping6_short "$interface" "$destination" "$ICMP_COUNT"
+  echo
+  ping6_long "$interface" "$destination" "$ICMP_COUNT"
+  return 0
+}
+
+ping_to_ipv4_internet() {
+  (($# >= 1)) || return 1
+  local interface="$1"
+  local destination="$IPV4_PING_TARGET"
+  ping4_short "$interface" "$destination" "$ICMP_COUNT"
+  echo
+  ping4_long "$interface" "$destination" "$ICMP_COUNT"
+  return 0
+}
+
+ping_to_ipv6_internet() {
+  (($# >= 1)) || return 1
+  local interface="$1"
+  local destination="$IPV6_PING_TARGET"
+  ping6_short "$interface" "$destination" "$ICMP_COUNT"
+  echo
+  ping6_long "$interface" "$destination" "$ICMP_COUNT"
+  return 0
+}
+
+trace_to_ipv4_internet() {
+  # mtr: non-root users cannot request an interval < 1.0 seconds
+  sudo mtr -b --aslookup -i "$ICMP_INTERVAL" "$IPV4_PING_TARGET"
+  # sudo mtr --report-wide -c 10 -b --aslookup -i "$ICMP_INTERVAL" "$IPV4_PING_TARGET" >> "$LOGFILE" &
+  return 0
+}
+
+trace_to_ipv6_internet() {
+  # mtr: non-root users cannot request an interval < 1.0 seconds
+  sudo mtr -b --aslookup -i "$ICMP_INTERVAL" "$IPV6_PING_TARGET"
+  # sudo mtr --report-wide -c 10 -b --aslookup -i "$ICMP_INTERVAL" "$IPV6_PING_TARGET" >> "$LOGFILE" &
+  return 0
+}
+
+lookup_a_record() {
+  (($# == 1)) && local resolver="@$1" || local resolver=""
+  local ipaddr=$(dig +short +time=1 $resolver $DNS_A_TARGET_FQDN a)
+  [[ "$ipaddr" == "$DNS_A_TARGET_ADDR" ]] || {
+    echo "$ipaddr"
+    return 1
+  }
+  return 0
+}
+
+lookup_aaaa_record() {
+  (($# == 1)) && local resolver="@$1" || local resolver=""
+  local ipaddr=$(dig +short +time=1 $resolver $DNS_AAAA_TARGET_FQDN aaaa)
+  [[ "$ipaddr" == "$DNS_AAAA_TARGET_ADDR" ]] || {
+    echo "$ipaddr"
+    return 1
+  }
+  return 0
+}
+
+discover_path_mtu_ipv4() {
+  (($# == 2)) || return 1
+  local interface="$1"
+  local destination="$2"
+  local size="$ICMP_SIZE"
+  while true; do
+    ping -c 1 -s "$size" -D -v "$destination" 1> /dev/null 2> /dev/null
+    (( $? > 0 )) && size=$(( $size - 1 )) || break
+    echo -n .
+  done
+  echo $size
+  return 0
+}
+
+discover_path_mtu_ipv6() {
+  (($# == 2)) || return 1
+  local interface="$1"
+  local destination="$2"
+  local size="$ICMPV6_SIZE"
+  while true; do
+    ping6 -c 1 -s "$size" -D -v "$destination" 1> /dev/null 2> /dev/null
+    (( $? > 0 )) && size=$(( $size - 1 )) || break
+    echo -n .
+  done
+  echo $size
+  return 0
+}
+
+check_ping_gw() {
+  (($# == 1)) || return 1
+  local interface="$1"
+  while true; do
+    echoorange "Phase 1-1. Ping to IPv4 GW\n"
+    echo
+    ping_to_ipv4_gw "$interface" 2>&1
+    read
+    echoorange "Phase 1-2. Ping to IPv6 GW\n"
+    echo
+    ping_to_ipv6_gw "$interface" 2>&1
+    echo
+    confirm || break
+  # done | tee -a "$LOGFILE" |\
+  # grep --color=auto -i -E '[[:digit:]]* packets received|$'
+  done
+  return 0
+}
+
+check_ping_internet() {
+  (($# == 1)) || return 1
+  local interface="$1"
+  while true; do
+    echoorange "Phase 2-1. Ping to IPv4 internet\n"
+    echo
+    ping_to_ipv4_internet "$interface" 2>&1
+    read
+    echoorange "Phase 2-2. Ping to IPv6 internet\n"
+    echo
+    ping_to_ipv6_internet "$interface" 2>&1
+    echo
+    confirm || break
+  # done | tee -a "$LOGFILE" |\
+  # grep --color=auto -i -E '[[:digit:]]* packets received|$'
+  done
+  return 0
+}
+
+check_traceroute() {
+  (($# == 1)) || return 1
+  local interface="$1"
+  while true; do
+    echoorange "Phase 3-1. Traceroute to IPv4 target\n"
+    trace_to_ipv4_internet "$interface" 2>&1
+    echo -e "done\n"
+    echoorange "Phase 3-2. Traceroute to IPv6 target\n"
+    trace_to_ipv6_internet "$interface" 2>&1
+    echo -e "done\n"
+    confirm || break
+  done
+  return 0
+}
+
+check_dns() {
+  (($# == 1)) || return 1
+  local interface="$1"
+  while true; do
+    echoorange "Phase 4-1. Lookup A record with IPv4 resolver\n"
+    for server in "${RESOLVER_V4[@]}"; do
+      local out=$(time lookup_a_record $server)
+      (($? > 0)) && echored "A (IPv4): Wrong answer ${out}" || echored "A (IPv4): OK"
+    done
+    echo
+    echoorange "Phase 4-2. Lookup AAAA record with IPv4 resolver\n"
+    for server in "${RESOLVER_V4[@]}"; do
+      local out=$(time lookup_aaaa_record $server)
+      (($? > 0)) && echored "AAAA (IPv4): Wrong answer ${out}" || echored "AAAA (IPv4): OK"
+    done
+    echo
+    echoorange "Phase 4-3. Lookup AAAA record with IPv6 resolver\n"
+    for server in "${RESOLVER_V6[@]}"; do
+      local out=$(time lookup_aaaa_record $server)
+      (($? > 0)) && echored "AAAA (IPv6): Wrong answer ${out}" || echored "AAAA (IPv6): OK"
+    done
+    echo
+    confirm || break
+  # done | tee -a "$LOGFILE"
+  done
+  return 0
+}
+
+check_www() {
+  echoorange "Phase 5. Website\n"
+  for url in "${WEBSITE_IPV4_URL[@]}"; do
+    open "$url" -a "$BROWSER"
+  done
+  for url in "${WEBSITE_IPV6_URL[@]}"; do
+    open "$url" -a "$BROWSER"
+  done
+  return 0
+}
+
+fullcheck() {
+  (($# == 1)) || return 1
+  local interface="$1"
+  local tmuxsession="Dropcheck"
+  local out
+
+  #====================================
+  # Phase 0. Retrieve IP address
+  #====================================
+  setup_interface
+  (($? == 2)) && return 2
+
+  watch_ip_addr "$interface"
+
+  [[ -z "$DROP_VLANID" ]] && echored "Koma is not specified or is not exist."
+  [[ -n "$DROP_VLANID" ]] && {
+    echoorange "Phase 0. Retrieve IPv4/IPv6 addresses\n"
+    echo
+    show_drop_information
+    echo
+    check_assigned_ipv4_addr "$interface"
+    local ret=$?
+    echo -n "IPv4: "; (($ret >= 1)) && echored "Assigned an invalid address" || echored "OK"
+    check_assigned_ipv6_addr "$interface"
+    local ret=$?
+    echo -n "IPv6: "; (($ret >= 1)) && echored "Assigned an invalid address" || echored "OK"
+    pause
+  }
+
+  toilet -w 100 -f mono9 "Dropcheck2019"
+
+  #====================================
+  # Phase 1. Ping check (intranet)
+  #====================================
+  check_ping_gw "$interface"
+  echo
+
+  #====================================
+  # Phase 2. Ping check (internet)
+  #====================================
+  check_ping_internet "$interface"
+  echo
+
+  #====================================
+  # Phase 3. Traceroute check
+  #====================================
+  while true; do
+    echoorange "Phase 3. Traceroute to IPv4/IPv6 target\n"
+    ## Comment out next line if mtr check is needed.
+    echo "skipped."; break
+    tmux new-session -s "$tmuxsession" -d "$DROPCHECKSH --eval trace_to_ipv4_internet"
+    tmux split-window -t "$tmuxsession" -h "$DROPCHECKSH --eval trace_to_ipv6_internet"
+    tmux attach-session -t "$tmuxsession"
+    echo -e "done.\n"
+    tmux kill-session -t "$tmuxsession" 2> /dev/null
+    confirm || break
+  done
+  echo
+
+  #====================================
+  # Phase 4. DNS check
+  #====================================
+  check_dns "$interface"
+  echo
+
+  #====================================
+  # Phase 5. WWW check
+  #====================================
+  check_www
+  echo
+
+  return 0
+}
+
+argparse() {
+  local fullcheck_flag=0
+
+  for opt in "$@"; do
+    case "$opt" in
+      '--interface')
+        INTERFACE="$2"
+        shift 2 ;;
+      '--csv')
+        DROP_CSV="$2"
+        shift 2 ;;
+      '--do-not-confirm')
+        DO_NOT_CONFIRM='1'
+        shift ;;
+      '--koma')
+        load_drop_information "$2"
+        shift 2 ;;
+      '--logfile')
+        LOGFILE="$2"
+        shift 2 ;;
+      '--dhcp-all-true')
+        DHCP_ALL_TRUE='1'
+        shift ;;
+      '--set-ip-static'|'--cidr')
+        set_ipv4_addr_static_cidr "$INTERFACE" "$2" "$3"
+        shift 3 ;;
+      '--set-ip-dhcp'|'--dhcp')
+        set_ipv4_addr_dhcp "$INTERFACE"
+        shift ;;
+      '--ping-gw')
+        check_ping_gw "$INTERFACE"
+        shift ;;
+      '--ping-internet')
+        check_ping_internet "$INTERFACE"
+        shift ;;
+      '--mtr'|'--trace')
+        check_traceroute "$INTERFACE"
+        shift ;;
+      '--dns')
+        check_dns "$INTERFACE"
+        shift ;;
+      '--www')
+        check_www "$INTERFACE"
+        shift ;;
+      '--dropcheck'|'--fullcheck'|'--full')
+        fullcheck_flag=1
+        shift ;;
+      '--eval')
+        eval "$2" "$INTERFACE"
+        shift 2 ;;
+    esac
+  done
+
+  (("$fullcheck_flag" == 0)) || fullcheck "$INTERFACE"
+}
+
+fukurozume() {
+  (($# == 1)) || return 1
+  local koma="$1"
+  load_drop_information "$koma"
+  show_drop_information
+  return 0
+}
+
+main() {
+  stop_wifi 1
+  argparse $@
+  stop_wifi 0
+}
+
+# fukurozume $1
+main $@
