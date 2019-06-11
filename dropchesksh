@@ -90,30 +90,34 @@ load_drop_information() {
   # local line=$(nkf "$DROP_CSV" | awk -F, "\$2 == $vlanid")
   local koma="$1"
   local line=$(nkf "$DROP_CSV" | awk -F, "tolower(\$14) ~ /${koma}.*/")
-  DROP_KOMA="$(echo $line | nkf | cut -d ',' -f 14)"
-  DROP_VLANID="$(echo $line | nkf | cut -d ',' -f 2)"
-  DROP_TAGGED="$(echo $line | nkf | cut -d ',' -f 3)"
-  DROP_SWITCHPORT="$(echo $line | nkf | cut -d ',' -f 4)"
-  DROP_POD="$(echo $line | nkf | cut -d ',' -f 5)"
-  DROP_ADDRESS_TYPE="$(echo $line | nkf | cut -d ',' -f 7)"
-  DROP_IPV4_ADDR="$(echo $line | nkf | cut -d ',' -f 8)"
-  DROP_IPV6_ADDR="$(echo $line | nkf | cut -d ',' -f 9)"
-  DROP_DHCP="$(echo $line | nkf | cut -d ',' -f 10)"
-  DROP_SECURITY="$(echo $line | nkf | cut -d ',' -f 11)"
-  DROP_IPV4_SFC="$(echo $line | nkf | cut -d ',' -f 12)"
-  DROP_IPV6_SFC="$(echo $line | nkf | cut -d ',' -f 13)"
+  DROP_KOMA=($(printf "$line" | nkf | cut -d ',' -f 14))
+  DROP_COMPANY=($(printf "$line" | nkf | cut -d ',' -f 15))
+  DROP_VLANID=($(printf "$line" | nkf | cut -d ',' -f 2))
+  DROP_TAGGED=($(printf "$line" | nkf | cut -d ',' -f 3))
+  DROP_SWITCHPORT=($(printf "$line" | nkf | cut -d ',' -f 4))
+  DROP_POD=($(printf "$line" | nkf | cut -d ',' -f 5))
+  DROP_ADDRESS_TYPE=($(printf "$line" | nkf | cut -d ',' -f 7))
+  DROP_IPV4_ADDR=($(printf "$line" | nkf | cut -d ',' -f 8))
+  DROP_IPV6_ADDR=($(printf "$line" | nkf | cut -d ',' -f 9))
+  DROP_DHCP=($(printf "$line" | nkf | cut -d ',' -f 10))
+  DROP_SECURITY=($(printf "$line" | nkf | cut -d ',' -f 11))
+  DROP_IPV4_SFC=($(printf "$line" | nkf | cut -d ',' -f 12))
+  DROP_IPV6_SFC=($(printf "$line" | nkf | cut -d ',' -f 13))
   return 0
 }
 
 show_drop_information() {
-  echo "---"
-  echo -ne 'Koma:\t'; echo "$DROP_KOMA"
-  echo -ne 'POD:\t'; echo "$DROP_POD"
-  echo -ne 'VLAN:\t'; echo "$DROP_VLANID"
-  echo -ne 'Tagged:\t'; echo "$DROP_TAGGED" | grep --color=auto -E -i "TRUE|$"
-  echo -ne 'DHCP:\t'; echo "$DROP_DHCP" | grep --color=auto -E -i "FALSE|$"
-  echo -ne 'IPv4:\t'; echo "$DROP_IPV4_ADDR" | grep --color=auto -E -i "$IP_ADDR_REGEX|$"
-  echo -ne 'IPv6:\t'; echo "$DROP_IPV6_ADDR" | grep --color=auto -E -i "$IP_ADDR_REGEX|$"
+  for i in $(seq 0 $((${#DROP_KOMA[*]} - 1))); do
+    echo "---"
+    echo -ne 'Corp:\t'; echo "${DROP_COMPANY[$i]}"
+    echo -ne 'Koma:\t'; echo "${DROP_KOMA[$i]}"
+    echo -ne 'POD:\t'; echo "${DROP_POD[$i]}"
+    echo -ne 'VLAN:\t'; echo "${DROP_VLANID[$i]}"
+    echo -ne 'Tagged:\t'; echo "${DROP_TAGGED[$i]}" | grep --color=auto -E -i "TRUE|$"
+    echo -ne 'DHCP:\t'; echo "${DROP_DHCP[$i]}" | grep --color=auto -E -i "FALSE|$"
+    echo -ne 'IPv4:\t'; echo "${DROP_IPV4_ADDR[$i]}" | grep --color=auto -E -i "$IP_ADDR_REGEX|$"
+    echo -ne 'IPv6:\t'; echo "${DROP_IPV6_ADDR[$i]}" | grep --color=auto -E -i "$IP_ADDR_REGEX|$"
+  done
   echo "---"
   return 0
 }
@@ -643,7 +647,7 @@ argparse() {
 }
 
 main() {
-  stop_wifi 1
+  # stop_wifi 1
   argparse $@
   # stop_wifi 0
 }
