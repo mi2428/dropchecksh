@@ -573,7 +573,8 @@ fullcheck() {
 }
 
 argparse() {
-  local fullcheck_flag=0
+  local fullcheck_flag='0'
+  local show_drop_flag='0'
 
   for opt in "$@"; do
     case "$opt" in
@@ -592,6 +593,9 @@ argparse() {
       '--koma')
         load_drop_information "$2"
         shift 2 ;;
+      '--show-drop-info')
+        show_drop_flag='1'
+        shift ;;
       '--logfile')
         LOGFILE="$2"
         shift 2 ;;
@@ -626,7 +630,7 @@ argparse() {
         check_www "$INTERFACE"
         shift ;;
       '--dropcheck'|'--fullcheck'|'--full')
-        fullcheck_flag=1
+        fullcheck_flag='1'
         shift ;;
       '--eval')
         eval "$2" "$INTERFACE"
@@ -635,14 +639,7 @@ argparse() {
   done
 
   (("$fullcheck_flag" == 0)) || fullcheck "$INTERFACE"
-}
-
-fukurozume() {
-  (($# == 1)) || return 1
-  local koma="$1"
-  load_drop_information "$koma"
-  show_drop_information
-  return 0
+  (("$show_drop_flag" == 0)) || show_drop_information
 }
 
 main() {
@@ -651,5 +648,4 @@ main() {
   # stop_wifi 0
 }
 
-# fukurozume $1
 main $@

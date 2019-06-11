@@ -27,6 +27,5 @@
 ドロップケーブルに貼り付ける出展社向けの取扱説明書の袋詰作業．  
 Podごとに束を作るので，紙に書いてあるコマ番号からPodを割り出せると便利．
 ```
-fukurozume $1
-# main $@
+% ./dropchecksh --csv ~/Downloads/dropcheck.csv --show-drop-info --koma 4a28
 ```
