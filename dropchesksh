@@ -647,9 +647,9 @@ argparse() {
 }
 
 main() {
-  # stop_wifi 1
+  stop_wifi 1
   argparse $@
-  # stop_wifi 0
+  stop_wifi 0
 }
 
 main $@
