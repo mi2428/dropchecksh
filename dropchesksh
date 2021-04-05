@@ -534,7 +534,7 @@ fullcheck() {
     pause
   }
 
-  toilet -w 100 -f mono9 "Dropcheck2019"
+  toilet -w 100 -f mono9 "Dropcheck2021"
 
   #====================================
   # Phase 1. Ping check (intranet)
