@@ -1,5 +1,8 @@
 #!/bin/bash
+SKIP_TRACEROUTE_CHECK='0'
 cd $(dirname $0)
+
+(( $EUID > 0 )) && sudo $0 $@ && exit 0
 
 BANNER="
 ____                   ____ _               _      ____   ___  _  ___
@@ -10,7 +13,7 @@ ____                   ____ _               _      ____   ___  _  ___
                |_|
 "
 
-INTERFACE="en7"
+INTERFACE="en9"
 DROPCHECKSH="$0"
 DO_NOT_CONFIRM='0'
 LOGFILE="/var/tmp/dropchecksh_$(date +%m-%d_%H:%M:%S).log"
@@ -28,8 +31,9 @@ ICMPV6_DO_NOT_FLAGMENT='1'
 IPV4_PING_TARGET='1.1.1.1'
 IPV6_PING_TARGET='2606:4700:4700::1111'
 
-RESOLVER_V4=('45.0.192.14' '45.0.192.15')
-RESOLVER_V6=('2001:3e8:0:1100::14' '2001:3e8:0:1100::15')
+SKIP_DNS_CHECK='0'
+RESOLVER_V4=('8.8.8.8' '8.8.4.4')
+RESOLVER_V6=('2001:4860:4860::8888' '2001:4860:4860::8844')
 DNS_A_TARGET_FQDN='www.wide.ad.jp'
 DNS_A_TARGET_ADDR='203.178.137.58'
 DNS_AAAA_TARGET_FQDN='www.wide.ad.jp'
@@ -90,33 +94,34 @@ load_drop_information() {
   # local line=$(nkf "$DROP_CSV" | awk -F, "\$2 == $vlanid")
   local koma="$1"
   local line=$(nkf "$DROP_CSV" | awk -F, "tolower(\$14) ~ /${koma}.*/")
-  DROP_KOMA=($(printf "$line" | nkf | cut -d ',' -f 14))
-  DROP_COMPANY=($(printf "$line" | nkf | cut -d ',' -f 15))
-  DROP_VLANID=($(printf "$line" | nkf | cut -d ',' -f 2))
-  DROP_TAGGED=($(printf "$line" | nkf | cut -d ',' -f 3))
-  DROP_SWITCHPORT=($(printf "$line" | nkf | cut -d ',' -f 4))
-  DROP_POD=($(printf "$line" | nkf | cut -d ',' -f 5))
+  DROP_VLANID=($(printf "$line"       | nkf | cut -d ',' -f 2))
+  DROP_TAGGED=($(printf "$line"       | nkf | cut -d ',' -f 3))
+  DROP_SWITCHPORT=($(printf "$line"   | nkf | cut -d ',' -f 4))
+  DROP_POD=($(printf "$line"          | nkf | cut -d ',' -f 5))
   DROP_ADDRESS_TYPE=($(printf "$line" | nkf | cut -d ',' -f 7))
-  DROP_IPV4_ADDR=($(printf "$line" | nkf | cut -d ',' -f 8))
-  DROP_IPV6_ADDR=($(printf "$line" | nkf | cut -d ',' -f 9))
-  DROP_DHCP=($(printf "$line" | nkf | cut -d ',' -f 10))
-  DROP_SECURITY=($(printf "$line" | nkf | cut -d ',' -f 11))
-  DROP_IPV4_SFC=($(printf "$line" | nkf | cut -d ',' -f 12))
-  DROP_IPV6_SFC=($(printf "$line" | nkf | cut -d ',' -f 13))
+  DROP_IPV4_ADDR=($(printf "$line"    | nkf | cut -d ',' -f 8))
+  DROP_IPV6_ADDR=($(printf "$line"    | nkf | cut -d ',' -f 9))
+  DROP_DHCP=($(printf "$line"         | nkf | cut -d ',' -f 10))
+  DROP_SECURITY=($(printf "$line"     | nkf | cut -d ',' -f 11))
+  # DROP_IPV4_SFC=($(printf "$line"     | nkf | cut -d ',' -f 12))
+  # DROP_IPV6_SFC=($(printf "$line"     | nkf | cut -d ',' -f 13))
+  DROP_SERVICE=($(printf "$line"      | nkf | cut -d ',' -f 12))
+  DROP_KOMA=($(printf "$line"         | nkf | cut -d ',' -f 13))
+  DROP_COMPANY=($(printf "$line"      | nkf | cut -d ',' -f 14))
   return 0
 }
 
 show_drop_information() {
   for i in $(seq 0 $((${#DROP_KOMA[*]} - 1))); do
     echo "---"
-    echo -ne 'Corp:\t'; echo "${DROP_COMPANY[$i]}"
-    echo -ne 'Koma:\t'; echo "${DROP_KOMA[$i]}"
-    echo -ne 'POD:\t'; echo "${DROP_POD[$i]}"
-    echo -ne 'VLAN:\t'; echo "${DROP_VLANID[$i]}"
-    echo -ne 'Tagged:\t'; echo "${DROP_TAGGED[$i]}" | grep --color=auto -E -i "TRUE|$"
-    echo -ne 'DHCP:\t'; echo "${DROP_DHCP[$i]}" | grep --color=auto -E -i "FALSE|$"
-    echo -ne 'IPv4:\t'; echo "${DROP_IPV4_ADDR[$i]}" | grep --color=auto -E -i "$IP_ADDR_REGEX|$"
-    echo -ne 'IPv6:\t'; echo "${DROP_IPV6_ADDR[$i]}" | grep --color=auto -E -i "$IP_ADDR_REGEX|$"
+    echo -ne 'Corp:\t';   echo "${DROP_COMPANY[$i]}"
+    echo -ne 'Koma:\t';   echo "${DROP_KOMA[$i]}"
+    echo -ne 'POD:\t';    echo "${DROP_POD[$i]}"
+    echo -ne 'VLAN:\t';   echo "${DROP_VLANID[$i]}"
+    echo -ne 'Tagged:\t'; echo "${DROP_TAGGED[$i]}"    | grep --color=auto -E -i "TRUE|$"
+    echo -ne 'DHCP:\t';   echo "${DROP_DHCP[$i]}"      | grep --color=auto -E -i "FALSE|$"
+    echo -ne 'IPv4:\t';   echo "${DROP_IPV4_ADDR[$i]}" | grep --color=auto -E -i "$IP_ADDR_REGEX|$"
+    echo -ne 'IPv6:\t';   echo "${DROP_IPV6_ADDR[$i]}" | grep --color=auto -E -i "$IP_ADDR_REGEX|$"
   done
   echo "---"
   return 0
@@ -134,7 +139,7 @@ setup_interface() {
     [[ "$interface" =~ en[0-9]+ ]] && {
       show_drop_information
       echo
-      echored "This is tagged drop! Please specify VLAN interface and rerun."
+      echored "This is tagged drop! Please specify VLAN interface using --interface option and rerun."
       echo
       return 2
     }
@@ -562,8 +567,10 @@ fullcheck() {
   #====================================
   # Phase 4. DNS check
   #====================================
-  check_dns "$interface"
+  [[ "$SKIP_DNS_CHECK" == '0' ]] && {
+    check_dns "$interface"
   echo
+  }
 
   #====================================
   # Phase 5. WWW check
@@ -620,6 +627,9 @@ argparse() {
         shift ;;
       '--skip-traceroute')
         SKIP_TRACEROUTE_CHECK='1'
+        shift ;;
+      '--skip-dns')
+        SKIP_DNS_CHECK='1'
         shift ;;
       '--mtr'|'--trace')
         check_traceroute "$INTERFACE"
