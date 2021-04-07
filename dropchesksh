@@ -130,7 +130,7 @@ show_drop_information() {
     echo "---"
     echo -ne 'Corp:\t';   echo "${DROP_COMPANY[$i]}"
     echo -ne 'Koma:\t';   echo "${DROP_KOMA[$i]}"
-    echo -ne 'POD:\t';    echo "${DROP_POD[$i]}"
+    echo -ne 'POD:\t';    echo "${DROP_POD[$i]}"       | grep --color=auto -E -i ".*"
     echo -ne 'VLAN:\t';   echo "${DROP_VLANID[$i]}"
     echo -ne 'Tagged:\t'; echo "${DROP_TAGGED[$i]}"    | grep --color=auto -E -i "TRUE|$"
     echo -ne 'DHCP:\t';   echo "${DROP_DHCP[$i]}"      | grep --color=auto -E -i "FALSE|$"
