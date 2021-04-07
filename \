@@ -374,7 +374,7 @@ ping_to_ipv4_internet() {
   local destination="$IPV4_PING_TARGET"
   ping4_short "$interface" "$destination" "$ICMP_COUNT"
   echo
-  (( $SKIP_LONG_PINGV4_CHECK == 1 )) || ping4_long "$interface" "$destination" "$ICMP_COUNT"
+  (( $SKIP_LONG_PINGV4_CHECK == 0 )) || ping4_long "$interface" "$destination" "$ICMP_COUNT"
   return 0
 }
 
@@ -384,7 +384,7 @@ ping_to_ipv6_internet() {
   local destination="$IPV6_PING_TARGET"
   ping6_short "$interface" "$destination" "$ICMP_COUNT"
   echo
-  (( $SKIP_LONG_PINGV6_CHECK == 1 )) || ping6_long "$interface" "$destination" "$ICMP_COUNT"
+  (( $SKIP_LONG_PINGV6_CHECK == 0 )) || ping6_long "$interface" "$destination" "$ICMP_COUNT"
   return 0
 }
 
