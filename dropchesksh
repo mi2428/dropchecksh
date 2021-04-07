@@ -167,20 +167,20 @@ setup_interface() {
   local interface="$INTERFACE"
   local networkservice="$NETWORKSERVICE"
 
-  # if [[ "$DROP_TAGGED" == 'true' ]]; then
-  #   if [[ -z "$(networksetup -listVLANs | "Tag: $DROP_VLANID")" ]]; then
-  #     networksetup -createVLAN "vlan${DROP_VLANID}" "$interface" "$DROP_VLANID"
-  #   fi
-  #   local vlanif=$(networksetup -listVLANs | grep -B 3 "Tag: $DROP_VLANID" | grep "Hardware" | awk '{print $NF}')
-  #   echored "Tagged interface ($vlanif) was selected."
-  #   INTERFACE="$vlanif"
-  # fi
-  if [[ "$interface" =~ en[0-9]+ ]]; then
-    show_drop_information
-    echo
-    echored "This is tagged drop! Please specify VLAN interface using --interface option and rerun."
-    echo
-    return 10
+  if [[ "$DROP_TAGGED" == 'true' ]]; then
+    # if [[ -z "$(networksetup -listVLANs | "Tag: $DROP_VLANID")" ]]; then
+    #   networksetup -createVLAN "vlan${DROP_VLANID}" "$interface" "$DROP_VLANID"
+    # fi
+    # local vlanif=$(networksetup -listVLANs | grep -B 3 "Tag: $DROP_VLANID" | grep "Hardware" | awk '{print $NF}')
+    # echored "Tagged interface ($vlanif) was selected."
+    # INTERFACE="$vlanif"
+    if [[ "$interface" =~ en[0-9]+ ]]; then
+      show_drop_information
+      echo
+      echored "This is tagged drop! Please specify VLAN interface using --interface option and rerun."
+      echo
+      return 10
+    fi
   fi
   if (( $DHCP_ALL_TRUE == 0 )) && [[ "$DROP_DHCP" == 'false' ]]; then
     local host=$(echo "$DROP_IPV4_ADDR" | ipcalc | grep "HostMax:" | awk '{print $2}')
@@ -324,6 +324,7 @@ ping4_long() {
   local interface="$1"
   local destination="$2"
   local count="${3:--1}"
+  (( $SKIP_LONG_PINGV4_CHECK == 0 )) || return 0
   ping4 "$interface" "$destination" "$ICMP_SIZE" "$count"
   return 0
 }
@@ -342,6 +343,7 @@ ping6_long() {
   local interface="$1"
   local destination="$2"
   local count="${3:--1}"
+  (( $SKIP_LONG_PINGV6_CHECK == 0 )) || return 0
   ping6 "$interface" "$destination" "$ICMP_SIZE" "$count"
   return 0
 }
@@ -374,7 +376,7 @@ ping_to_ipv4_internet() {
   local destination="$IPV4_PING_TARGET"
   ping4_short "$interface" "$destination" "$ICMP_COUNT"
   echo
-  (( $SKIP_LONG_PINGV4_CHECK == 1 )) || ping4_long "$interface" "$destination" "$ICMP_COUNT"
+  ping4_long "$interface" "$destination" "$ICMP_COUNT"
   return 0
 }
 
@@ -384,7 +386,7 @@ ping_to_ipv6_internet() {
   local destination="$IPV6_PING_TARGET"
   ping6_short "$interface" "$destination" "$ICMP_COUNT"
   echo
-  (( $SKIP_LONG_PINGV6_CHECK == 1 )) || ping6_long "$interface" "$destination" "$ICMP_COUNT"
+  ping6_long "$interface" "$destination" "$ICMP_COUNT"
   return 0
 }
 
