@@ -621,10 +621,10 @@ argparse() {
 
   for opt in "$@"; do
     case "$opt" in
-      '--interface')
+      '--interface'|'--if')
         INTERFACE="$2"
         shift 2 ;;
-      '--network-service')
+      '--network-service'|'--ns')
         NETWORKSERVICE="$2"
         shift 2 ;;
       '--csv')
