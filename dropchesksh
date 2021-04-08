@@ -121,19 +121,19 @@ load_drop_information() {
     echo
     return 2
   }
-  DROP_VLANID=($(printf "$line"       | nkf | cut -d ',' -f 2))
-  DROP_TAGGED=($(printf "$line"       | nkf | cut -d ',' -f 3))
-  DROP_SWITCHPORT=($(printf "$line"   | nkf | cut -d ',' -f 4))
-  DROP_POD=($(printf "$line"          | nkf | cut -d ',' -f 5))
-  DROP_ADDRESS_TYPE=($(printf "$line" | nkf | cut -d ',' -f 7))
-  DROP_IPV4_ADDR=($(printf "$line"    | nkf | cut -d ',' -f 8))
-  DROP_IPV6_ADDR=($(printf "$line"    | nkf | cut -d ',' -f 9))
-  DROP_DHCP=($(printf "$line"         | nkf | cut -d ',' -f 10))
-  DROP_SECURITY=($(printf "$line"     | nkf | cut -d ',' -f 11))
-  # DROP_IPV4_SFC=($(printf "$line"     | nkf | cut -d ',' -f 12))
-  # DROP_IPV6_SFC=($(printf "$line"     | nkf | cut -d ',' -f 13))
-  DROP_KOMA=($(printf "$line"         | nkf | cut -d ',' -f 12))
-  DROP_COMPANY=($(printf "$line"      | nkf | cut -d ',' -f 13))
+  DROP_VLANID=($(printf "$line"       | nkf | cut -d ',' -f 2  | sed "s/ /_/g"))
+  DROP_TAGGED=($(printf "$line"       | nkf | cut -d ',' -f 3  | sed "s/ /_/g"))
+  DROP_SWITCHPORT=($(printf "$line"   | nkf | cut -d ',' -f 4  | sed "s/ /_/g"))
+  DROP_POD=($(printf "$line"          | nkf | cut -d ',' -f 5  | sed "s/ /_/g"))
+  DROP_ADDRESS_TYPE=($(printf "$line" | nkf | cut -d ',' -f 7  | sed "s/ /_/g"))
+  DROP_IPV4_ADDR=($(printf "$line"    | nkf | cut -d ',' -f 8  | sed "s/ /_/g"))
+  DROP_IPV6_ADDR=($(printf "$line"    | nkf | cut -d ',' -f 9  | sed "s/ /_/g"))
+  DROP_DHCP=($(printf "$line"         | nkf | cut -d ',' -f 10 | sed "s/ /_/g"))
+  DROP_SECURITY=($(printf "$line"     | nkf | cut -d ',' -f 11 | sed "s/ /_/g"))
+  DROP_KOMA=($(printf "$line"         | nkf | cut -d ',' -f 12 | sed "s/ /_/g"))
+  DROP_COMPANY=($(printf "$line"      | nkf | cut -d ',' -f 13 | sed "s/ /_/g"))
+  # DROP_IPV4_SFC=($(printf "$line"     | nkf | cut -d ',' -f 12 | sed "s/ /_/g"))
+  # DROP_IPV6_SFC=($(printf "$line"     | nkf | cut -d ',' -f 13 | sed "s/ /_/g"))
   return 0
 }
 
@@ -183,12 +183,13 @@ setup_interface() {
   local networkservice="$NETWORKSERVICE"
 
   if [[ "$DROP_TAGGED" == 'true' ]]; then
-    # if [[ -z "$(networksetup -listVLANs | "Tag: $DROP_VLANID")" ]]; then
-    #   networksetup -createVLAN "vlan${DROP_VLANID}" "$interface" "$DROP_VLANID"
-    # fi
-    # local vlanif=$(networksetup -listVLANs | grep -B 3 "Tag: $DROP_VLANID" | grep "Hardware" | awk '{print $NF}')
-    # echored "Tagged interface ($vlanif) was selected."
-    # INTERFACE="$vlanif"
+    if [[ -z "$(networksetup -listVLANs | "Tag: $DROP_VLANID")" ]]; then
+      networksetup -createVLAN "vlan${DROP_VLANID}" "$interface" "$DROP_VLANID"
+    fi
+    local vlanif=$(networksetup -listVLANs | grep -B 3 "Tag: $DROP_VLANID" | grep "Hardware" | awk '{print $NF}')
+    echored "Tagged interface ($vlanif) was selected."
+    INTERFACE="$vlanif"
+
     if [[ "$interface" =~ en[0-9]+ ]]; then
       show_drop_information
       echo
