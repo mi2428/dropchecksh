@@ -1,4 +1,6 @@
 #!/bin/bash
+# vim: set ts=2 sw=2 :
+
 SKIP_TRACEROUTE_CHECK='0'
 cd $(dirname $0)
 
@@ -94,6 +96,12 @@ stop_wifi() {
   return 0
 }
 
+clear_interface_config() {
+  local networkservice="$NETWORKSERVICE"
+  networksetup -setdhcp $networkservice
+  return 0
+}
+
 load_drop_information() {
   (($# == 1)) || return 1
   [[ -n $DROP_CSV ]] || return 2
@@ -101,11 +109,17 @@ load_drop_information() {
   # local line=$(nkf "$DROP_CSV" | awk -F, "\$2 == $vlanid")
   local koma="$1"
   local line=$(nkf "$DROP_CSV" | awk -F, "tolower(\$12) ~ /${koma}.*/")
+  [[ -n "$DROP_CSV" ]] || {
+    echo
+    echored "Use --koma with --csv specifying the Dropcheck CSV"
+    echo
+    return 1
+  }
   [[ -n "$line" ]] || {
     echo
     echored "Koma not found: $koma"
     echo
-    return 1
+    return 2
   }
   DROP_VLANID=($(printf "$line"       | nkf | cut -d ',' -f 2))
   DROP_TAGGED=($(printf "$line"       | nkf | cut -d ',' -f 3))
@@ -125,6 +139,7 @@ load_drop_information() {
 
 show_interface_information() {
   networksetup -listallnetworkservices
+  return 0
 }
 
 show_drop_information() {
