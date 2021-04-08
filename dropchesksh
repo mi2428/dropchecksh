@@ -643,16 +643,55 @@ fullcheck() {
   return 0
 }
 
+usage() {
+cat <<EOF
+Usage: dropchecksh [options...]
+ -I, --interface <name>           Specify interface
+ -N, --network-service <name>     Specify network service
+     --csv <path>                 Path of Dropcheck CSV downloaded from TTDB
+ -k, --koma <id>                  Specify the Koma ID, must be used with --csv option
+ -S, --show-drop-info             Show drop cable information (flag option), must be used with --csv option
+     --logfile <path>             Save log
+
+ -i, --set-ip-static <cidr> <gw>  Assign IP address manually
+     --cidr <cidr> <gw>           Assign IP address manually (alias)
+     --set-ip-dhcp                Assign IP address with DHCP client
+     --dhcp                       Assign IP address with DHCP client (alias)
+
+     --do-not-confirm             Skip repeat confirmation (flag option)
+     --skip-precheck              Skip interface auto-configuration (flag option)
+     --dhcp-all-true              Use DHCP for all drop cables (flag option)
+     --skip-long-ping4            Skip 1500 bytes ping4 check (flag option)
+     --skip-long-ping6            Skip 1500 bytes ping6 check (flag option)
+     --skip-traceroute            Skip mtr check (flag option)
+     --skip-dns                   Skip DNS check (flag option)
+     --skip-www                   Skip browser check (flag option)
+
+     --ping-gw                    Send ping to GWs (flag option)
+     --ping-internet              Send ping to internet targets (flag option)
+     --traceroute                 Check traceroute (flag option)
+     --dns                        Check DNS (flag option)
+     --www                        Check web browsing (flag option)
+ -f, --fullcheck                  Run all checks (flag option)
+
+     --eval <function>            For debugging
+ -h, --help                       This help text
+EOF
+}
+
 argparse() {
   local fullcheck_flag=0
   local show_drop_flag=0
 
   for opt in "$@"; do
     case "$opt" in
-      '--interface'|'--if')
+      '--help'|'-h')
+        usage
+        exit 0 ;;
+      '--interface'|'-I')
         INTERFACE="$2"
         shift 2 ;;
-      '--network-service'|'--ns')
+      '--network-service'|'-N')
         NETWORKSERVICE="$2"
         shift 2 ;;
       '--csv')
@@ -664,10 +703,10 @@ argparse() {
       '--skip-precheck')
         SKIP_PRECHECK=1
         shift ;;
-      '--koma')
+      '--koma'|'-k')
         load_drop_information "$2"
         shift 2 ;;
-      '--show-drop-info')
+      '--show-drop-info'|'-S')
         show_drop_flag=1
         shift ;;
       '--logfile')
@@ -676,7 +715,7 @@ argparse() {
       '--dhcp-all-true')
         DHCP_ALL_TRUE=1
         shift ;;
-      '--set-ip-static'|'--cidr')
+      '--set-ip-static'|'--cidr'|'-i')
         is_valid_interface_config || return 250
         set_ipv4_addr_static_cidr "$NETWORKSERVICE" "$2" "$3"
         shift 3 ;;
@@ -704,7 +743,7 @@ argparse() {
       '--skip-dns')
         SKIP_DNS_CHECK=1
         shift ;;
-      '--mtr'|'--trace')
+      '--traceroute'|'--trace')
         is_valid_interface_config || return 250
         check_traceroute "$INTERFACE"
         shift ;;
@@ -719,7 +758,7 @@ argparse() {
         is_valid_interface_config || return 250
         check_www "$INTERFACE"
         shift ;;
-      '--dropcheck'|'--fullcheck'|'--full')
+      '--dropcheck'|'--fullcheck'|'--full'|'-f')
         fullcheck_flag=1
         shift ;;
       '--eval')
