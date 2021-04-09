@@ -183,12 +183,16 @@ setup_interface() {
   local networkservice="$NETWORKSERVICE"
 
   if [[ "$DROP_TAGGED" == 'true' ]]; then
-    if [[ -z "$(networksetup -listVLANs | "Tag: $DROP_VLANID")" ]]; then
+    if [[ -z "$(networksetup -listVLANs | grep "Tag: $DROP_VLANID")" ]]; then
       networksetup -createVLAN "vlan${DROP_VLANID}" "$interface" "$DROP_VLANID"
+      (( $? == 0 )) && echored "New virtual interface was created: vid=$DROP_VLANID"
     fi
     local vlanif=$(networksetup -listVLANs | grep -B 3 "Tag: $DROP_VLANID" | grep "Hardware" | awk '{print $NF}')
     echored "Tagged interface ($vlanif) was selected."
     INTERFACE="$vlanif"
+    NETWORKSERVICE="$(networksetup -listallnetworkservices | grep vlan${DROP_VLANID})"
+    interface="$INTERFACE"
+    networkservice="$NETWORKSERVICE"
 
     if [[ "$interface" =~ en[0-9]+ ]]; then
       show_drop_information
@@ -654,9 +658,9 @@ Usage: dropchecksh [options...]
      --logfile <path>             Save log
 
  -i, --set-ip-static <cidr> <gw>  Assign IP address manually
-     --cidr <cidr> <gw>           Assign IP address manually (alias)
-     --set-ip-dhcp                Assign IP address with DHCP client
-     --dhcp                       Assign IP address with DHCP client (alias)
+     --cidr <cidr> <gw>           Assign IP address manually (alias of above)
+ -d, --set-ip-dhcp                Assign IP address with DHCP client
+     --dhcp                       Assign IP address with DHCP client (alias of above)
 
      --do-not-confirm             Skip repeat confirmation (flag option)
      --skip-precheck              Skip interface auto-configuration (flag option)
@@ -719,7 +723,7 @@ argparse() {
         is_valid_interface_config || return 250
         set_ipv4_addr_static_cidr "$NETWORKSERVICE" "$2" "$3"
         shift 3 ;;
-      '--set-ip-dhcp'|'--dhcp')
+      '--set-ip-dhcp'|'--dhcp'|'-d')
         is_valid_interface_config || return 250
         set_ipv4_addr_dhcp "$NETWORKSERVICE"
         shift ;;
