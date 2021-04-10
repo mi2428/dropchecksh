@@ -26,7 +26,9 @@ DO_NOT_CONFIRM=0
 LOGFILE="/var/tmp/dropchecksh_$(date +%m-%d_%H:%M:%S).log"
 
 DHCP_ALL_TRUE=0
+DHCP_ALL_FALSE=0
 SKIP_PRECHECK=0
+CLEAR_V4_INTERFACE=1
 
 SKIP_LONG_PINGV4_CHECK=0
 SKIP_LONG_PINGV6_CHECK=0
@@ -98,7 +100,7 @@ stop_wifi() {
 
 clear_interface_config() {
   local networkservice="$NETWORKSERVICE"
-  networksetup -setdhcp $networkservice
+  networksetup -setv4off $networkservice
   return 0
 }
 
@@ -182,6 +184,8 @@ setup_interface() {
   local interface="$INTERFACE"
   local networkservice="$NETWORKSERVICE"
 
+  (( $CLEAR_V4_INTERFACE == 1 )) && clear_interface_config "$NETWORKSERVICE"
+
   if [[ "$DROP_TAGGED" == 'true' ]]; then
     if [[ -z "$(networksetup -listVLANs | grep "Tag: $DROP_VLANID")" ]]; then
       networksetup -createVLAN "vlan${DROP_VLANID}" "$interface" "$DROP_VLANID"
@@ -202,7 +206,7 @@ setup_interface() {
       return 10
     fi
   fi
-  if (( $DHCP_ALL_TRUE == 0 )) && [[ "$DROP_DHCP" == 'false' ]]; then
+  if (( $DHCP_ALL_FALSE == 1 )) || (( $DHCP_ALL_TRUE == 0 )) && [[ "$DROP_DHCP" == 'false' ]]; then
     local host=$(echo "$DROP_IPV4_ADDR" | ipcalc | grep "HostMax:" | awk '{print $2}')
     local netmask=$(echo "$DROP_IPV4_ADDR" | ipcalc | grep "Netmask:" | awk '{print $2}')
     local gateway=$(echo "$DROP_IPV4_ADDR" | ipcalc | grep "HostMin:" | awk '{print $2}')
@@ -561,6 +565,7 @@ check_www() {
   for url in "${WEBSITE_IPV6_URL[@]}"; do
     open "$url" -a "$BROWSER"
   done
+  pause
   return 0
 }
 
@@ -665,6 +670,7 @@ Usage: dropchecksh [options...]
      --do-not-confirm             Skip repeat confirmation (flag option)
      --skip-precheck              Skip interface auto-configuration (flag option)
      --dhcp-all-true              Use DHCP for all drop cables (flag option)
+     --dhcp-all-false             Use static assigned IP for all drop cables (flag option)
      --skip-long-ping4            Skip 1500 bytes ping4 check (flag option)
      --skip-long-ping6            Skip 1500 bytes ping6 check (flag option)
      --skip-traceroute            Skip mtr check (flag option)
@@ -719,13 +725,18 @@ argparse() {
       '--dhcp-all-true')
         DHCP_ALL_TRUE=1
         shift ;;
+      '--dhcp-all-false')
+        DHCP_ALL_FALSE=1
+        shift ;;
       '--set-ip-static'|'--cidr'|'-i')
         is_valid_interface_config || return 250
         set_ipv4_addr_static_cidr "$NETWORKSERVICE" "$2" "$3"
+        CLEAR_V4_INTERFACE=0
         shift 3 ;;
       '--set-ip-dhcp'|'--dhcp'|'-d')
         is_valid_interface_config || return 250
         set_ipv4_addr_dhcp "$NETWORKSERVICE"
+        CLEAR_V4_INTERFACE=0
         shift ;;
       '--ping-gw')
         check_ping_gw "$INTERFACE"
