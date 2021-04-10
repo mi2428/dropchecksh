@@ -184,14 +184,11 @@ setup_interface() {
   local interface="$INTERFACE"
   local networkservice="$NETWORKSERVICE"
 
-  # Clear IPv4 configuration
-  (( $CLEAR_V4_INTERFACE == 1 )) && clear_interface_config "$NETWORKSERVICE"
-
   # Create logical interface if necessary
   if [[ "$DROP_TAGGED" == 'true' ]]; then
     if [[ -z "$(networksetup -listVLANs | grep "Tag: $DROP_VLANID")" ]]; then
       networksetup -createVLAN "vlan${DROP_VLANID}" "$interface" "$DROP_VLANID"
-      (( $? == 0 )) && echored "New virtual interface was created: vid=$DROP_VLANID"
+      (( $? == 0 )) && echored "New virtual interface was created: vlan$DROP_VLANID"
     fi
     local vlanif=$(networksetup -listVLANs | grep -B 3 "Tag: $DROP_VLANID" | grep "Hardware" | awk '{print $NF}')
     echored "Tagged interface ($vlanif) was selected."
@@ -208,6 +205,9 @@ setup_interface() {
       return 10
     fi
   fi
+
+  # Clear IPv4 configuration
+  (( $CLEAR_V4_INTERFACE == 1 )) && clear_interface_config "$NETWORKSERVICE"
 
   # Assign IP address statistically or dynamically
   if (( $DHCP_ALL_FALSE == 1 )) || (( $DHCP_ALL_TRUE == 0 )) && [[ "$DROP_DHCP" == 'false' ]]; then
