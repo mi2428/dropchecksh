@@ -184,8 +184,10 @@ setup_interface() {
   local interface="$INTERFACE"
   local networkservice="$NETWORKSERVICE"
 
+  # Clear IPv4 configuration
   (( $CLEAR_V4_INTERFACE == 1 )) && clear_interface_config "$NETWORKSERVICE"
 
+  # Create logical interface if necessary
   if [[ "$DROP_TAGGED" == 'true' ]]; then
     if [[ -z "$(networksetup -listVLANs | grep "Tag: $DROP_VLANID")" ]]; then
       networksetup -createVLAN "vlan${DROP_VLANID}" "$interface" "$DROP_VLANID"
@@ -206,12 +208,16 @@ setup_interface() {
       return 10
     fi
   fi
+
+  # Assign IP address statistically or dynamically
   if (( $DHCP_ALL_FALSE == 1 )) || (( $DHCP_ALL_TRUE == 0 )) && [[ "$DROP_DHCP" == 'false' ]]; then
     local host=$(echo "$DROP_IPV4_ADDR" | ipcalc | grep "HostMax:" | awk '{print $2}')
     local netmask=$(echo "$DROP_IPV4_ADDR" | ipcalc | grep "Netmask:" | awk '{print $2}')
     local gateway=$(echo "$DROP_IPV4_ADDR" | ipcalc | grep "HostMin:" | awk '{print $2}')
     set_ipv4_addr_static "$INTERFACE" "$host" "$netmask" "$gateway"
     echored "IPv4 address was assigned."
+  else
+    set_ipv4_addr_dhcp "$NETWORKSERVICE"
   fi
   return 0
 }
