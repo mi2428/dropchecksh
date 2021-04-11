@@ -37,8 +37,8 @@ ICMP_INTERVAL='0.1'
 ICMP_COUNT='5'
 ICMP_SIZE='1472'
 ICMPV6_SIZE='1452'
-ICMP_DO_NOT_FLAGMENT='1'
-ICMPV6_DO_NOT_FLAGMENT='1'
+ICMP_DO_NOT_FLAGMENT=1
+ICMPV6_DO_NOT_FLAGMENT=1
 IPV4_PING_TARGET='1.1.1.1'
 IPV6_PING_TARGET='2606:4700:4700::1111'
 
@@ -215,7 +215,7 @@ setup_interface() {
     local netmask=$(echo "$DROP_IPV4_ADDR" | ipcalc | grep "Netmask:" | awk '{print $2}')
     local gateway=$(echo "$DROP_IPV4_ADDR" | ipcalc | grep "HostMin:" | awk '{print $2}')
     set_ipv4_addr_static "$INTERFACE" "$host" "$netmask" "$gateway"
-    echored "IPv4 address was assigned."
+    echored "Static IPv4 address was assigned."
   else
     set_ipv4_addr_dhcp "$NETWORKSERVICE"
   fi
