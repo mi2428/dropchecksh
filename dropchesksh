@@ -241,7 +241,9 @@ set_ipv4_addr_static() {
   local address="$2"
   local netmask="$3"
   local router="$4"
+  local nameserver="1.1.1.1"
   networksetup -setmanual "$networkservice" "$address" "$netmask" "$router" || return 2
+  networksetup -setdnsservers "$networkservice" "$nameserver" || return 3
   return 0
 }
 
